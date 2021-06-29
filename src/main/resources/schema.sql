@@ -1,0 +1,15 @@
+drop table if exists project CASCADE;
+drop table if exists task CASCADE;
+drop table if exists user CASCADE;
+drop table if exists user_projects CASCADE;
+drop sequence if exists hibernate_sequence;
+create sequence hibernate_sequence start with 1 increment by 1;
+create table project (id bigint not null, project_aim varchar(255), primary key (id));
+create table task (id bigint not null, estimation_time timestamp, is_done boolean not null, task_aim varchar(255), parent_task_id bigint, project_id bigint, user_id bigint, primary key (id));
+create table user (id bigint not null, username varchar(255), primary key (id));
+create table user_projects (users_id bigint not null, projects_id bigint not null);
+alter table task add constraint FKqxs9fnf0nvg4pou1gng0jtom4 foreign key (parent_task_id) references task;
+alter table task add constraint FKk8qrwowg31kx7hp93sru1pdqa foreign key (project_id) references project;
+alter table task add constraint FK2hsytmxysatfvt0p1992cw449 foreign key (user_id) references user;
+alter table user_projects add constraint FK3jysayx08qn1fu6wwa82vcs71 foreign key (projects_id) references project;
+alter table user_projects add constraint FKmwi1uu74hiwql5e71avwwfx1t foreign key (users_id) references user;

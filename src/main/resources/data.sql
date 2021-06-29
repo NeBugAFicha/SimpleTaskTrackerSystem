@@ -1,0 +1,12 @@
+call next value for hibernate_sequence;
+insert into user (username, id) values ('vasya',-1);
+insert into user (username, id) values ('vasisyaiy',-2);
+insert into user (username, id) values ('admin',-3);
+insert into user (username, id) values ('egor',-4);
+insert into project (project_aim, id) values ('project', -5);
+insert into user_projects (users_id, projects_id) values (-4, -5);
+insert into user_projects (users_id, projects_id) values (-3, -5);
+insert into task (estimation_time, is_done, parent_task_id, project_id, task_aim, user_id, id) values ('2021-06-23 17:14:40.532	', false, null, -5, 'task', -4, -6);
+insert into task (estimation_time, is_done, parent_task_id, project_id, task_aim, user_id, id) values ('2021-06-23 17:14:40.532	', false, -6, -5, 'task_1', -4, -7);
+insert into task (estimation_time, is_done, parent_task_id, project_id, task_aim, user_id, id) values ('2021-06-23 17:14:40.532	', false, null, -5, 'task2', -3, -8);
+insert into task (estimation_time, is_done, parent_task_id, project_id, task_aim, user_id, id) values ('2021-06-23 17:14:40.532	', false, -8, -5, 'task2_1', -3, -9);
