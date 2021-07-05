@@ -15,10 +15,10 @@ public class User {
     public User(String username){
         this.username=username;
     }
-    @ManyToMany(cascade = CascadeType.PERSIST)
+    @ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE})
     private List<Project> projects;
 
-    @OneToMany(fetch = FetchType.EAGER,cascade = CascadeType.ALL, mappedBy = "user", orphanRemoval = true)
+    @OneToMany(fetch = FetchType.EAGER,cascade = {CascadeType.PERSIST, CascadeType.MERGE, CascadeType.REFRESH, CascadeType.REMOVE}, mappedBy = "user", orphanRemoval = true)
     private List<Task> tasks;
 
     public long getId() {
@@ -54,5 +54,8 @@ public class User {
     }
     public void deleteTask(Task task){
         for(int i = 0; i < tasks.size();i++) if(tasks.get(i).getId()==task.getId()) tasks.remove(i);
+    }
+    public void deleteProject(List<Project> projects, Project project){
+        for(int i = 0; i < projects.size();i++) if(projects.get(i).getId()==project.getId()) projects.remove(i);
     }
 }

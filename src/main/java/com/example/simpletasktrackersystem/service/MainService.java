@@ -9,6 +9,8 @@ import com.example.simpletasktrackersystem.repos.TaskRepo;
 import com.example.simpletasktrackersystem.repos.UserRepo;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.*;
 import java.util.stream.Collectors;
@@ -70,7 +72,7 @@ public class MainService {
             if(task1.getId()==task.getId()) newTasks.set(newTasks.indexOf(task1),task);
         });
     }
-
+    @Transactional(rollbackFor = NullPointerException.class, propagation = Propagation.REQUIRED)
     public void addSubTask(Task parentTask){
         if(parentTask.getUser()==null) return;
         Task subTask = new Task();
@@ -96,12 +98,12 @@ public class MainService {
         Project project = new Project();
         project.setProjectAim(projectAim.trim());
         projectRepo.save(project);
-        userRepo.saveAll(assignedUsers.stream().map(user -> {
+        assignedUsers.stream().forEach(user -> {
             List<Project> projects = projectRepo.findByUsers_Username(user.getUsername());;
             projects.add(project);
             user.setProjects(projects);
-            return user;
-        }).collect(Collectors.toList()));
+            userRepo.save(user);
+        });
         newTasks.stream().forEach(task -> {
             task.setProject(project);
             task.setUser(userRepo.findById(task.getUser().getId()).get());
@@ -112,9 +114,9 @@ public class MainService {
     }
 
     public void deleteUser(User user){
-        assignedUsers.remove(user);
-        showUserTasks.remove(user);
-        showUserProjects.remove(user);
+        assignedUsers = assignedUsers.stream().filter(user1 -> user1.getId()!=user.getId()).collect(Collectors.toList());
+        showUserTasks = showUserTasks.stream().filter(user1 -> user1.getId()!=user.getId()).collect(Collectors.toList());
+        showUserProjects = showUserProjects.stream().filter(user1 -> user1.getId()!=user.getId()).collect(Collectors.toList());
         newTasks = newTasks.stream().filter(task -> task.getUser().getId()!=user.getId()).collect(Collectors.toList());
         taskRepo.findAllByUser(user).stream().forEach(task -> {
             if(task.getProject()!=null){
@@ -122,17 +124,21 @@ public class MainService {
                 projectRepo.save(task.getProject());
             }
         });
-        userRepo.delete(userRepo.findByUsername(user.getUsername()));
+        userRepo.delete(user);
     }
 
     public void deleteProject(Project project){
         newTasks = newTasks.stream().filter(task -> task.getProject().getId()!=project.getId()).collect(Collectors.toList());
-        taskRepo.findAllByProject(project).stream().forEach(task -> {
-                User user = userRepo.findByUsername(task.getUser().getUsername());
-                user.deleteTask(task);
-                userRepo.save(user);
-        });
-        projectRepo.delete(projectRepo.findById(project.getId()).get());
+        userRepo.saveAll(
+                userRepo.findByProjects_Id(project.getId()).stream().map(user -> {
+                    List<Project> projects = projectRepo.findByUsers_Username(user.getUsername());
+                    for(int i = 0; i < projects.size();i++) if(projects.get(i).getId()==project.getId()) projects.remove(i);
+                    for(int i = 0; i < project.getTasks().size(); i++) user.deleteTask(project.getTasks().get(i));
+                    user.setProjects(projects);
+                    return user;
+                }).collect(Collectors.toList())
+        );
+        projectRepo.delete(project);
     }
 
     public void unsignUser(User user){
@@ -146,13 +152,14 @@ public class MainService {
 
     public void deleteTask(Task task){
         if(task.getUser()==null) taskRepo.delete(task);
-        User user = userRepo.findByUsername(task.getUser().getUsername());
+        //User user = userRepo.findByUsername(task.getUser().getUsername());
+        User user = task.getUser();
         user.deleteTask(task);
         for(int i = 0;i < newTasks.size();i++)
             if(newTasks.get(i).getId()==task.getId()) {
                 newTasks.remove(i);
                 i--;
-            }else if(newTasks.get(i).getId()==task.getParentTask().getId()) {
+            }else if(newTasks.get(i).getParentTask()!=null&&newTasks.get(i).getId()==task.getParentTask().getId()) {
                 task.getParentTask().deleteTask(task);
             }
         if(!task.getSubTasks().isEmpty()) deleteSubTasksFromNewTask(task.getSubTasks(),user);

@@ -11,12 +11,13 @@ public class Project {
     @GeneratedValue(strategy = GenerationType.AUTO)
     private long id;
     private String projectAim;
-    @ManyToMany(cascade = CascadeType.PERSIST, mappedBy = "projects")
-    List<User> users;
-    @OneToMany(fetch = FetchType.EAGER, cascade = CascadeType.ALL, mappedBy = "project")
-    private List<Task> tasks;
     public Project(){
     }
+    @ManyToMany(cascade = {CascadeType.PERSIST, CascadeType.MERGE,CascadeType.REFRESH}, mappedBy = "projects")
+    List<User> users;
+    @OneToMany(fetch = FetchType.EAGER, cascade = {CascadeType.PERSIST, CascadeType.MERGE}, mappedBy = "project")
+    private List<Task> tasks;
+
     public long getId() {
         return id;
     }
@@ -51,4 +52,5 @@ public class Project {
     public void deleteTask(Task task){
         for(int i = 0; i < tasks.size();i++) if(tasks.get(i).getId()==task.getId()) tasks.remove(i);
     }
+
 }
