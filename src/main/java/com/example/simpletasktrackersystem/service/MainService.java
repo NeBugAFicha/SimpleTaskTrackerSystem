@@ -12,15 +12,16 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import javax.persistence.criteria.CriteriaBuilder;
 import java.util.*;
 import java.util.stream.Collectors;
 
 @Service
 public class MainService {
-    List<User> showUserTasks = new ArrayList<User>();
-    List<User> showUserProjects = new ArrayList<User>();
-    List<Task> newTasks = new ArrayList<Task>();
-    List<User> assignedUsers = new ArrayList<User>();
+    private List<Long> showUserTasks = new ArrayList<>();
+    private List<Long> showUserProjects = new ArrayList<>();
+    private List<Long> newTasks = new ArrayList<>();
+    private Set<Long> assignedUsers = new HashSet<>();
     @Autowired
     UserRepo userRepo;
     @Autowired
@@ -31,29 +32,19 @@ public class MainService {
         if(userRepo.findByUsername(username)==null) userRepo.save(new User(username));
     }
     public void showUserTasks(User user){
-        for(int i = 0;i < showUserTasks.size();i++) {
-            if (showUserTasks.get(i).getId() == user.getId()) {
-                showUserTasks.remove(i);
-                return;
-            }
-        }
-        showUserTasks.add(user);
+        if(showUserTasks.contains(user.getId())) showUserTasks.remove(user.getId());
+        else showUserTasks.add(user.getId());
     }
 
     public void showUserProjects(User user){
-        for(int i = 0;i < showUserProjects.size();i++) {
-            if (showUserProjects.get(i).getId() == user.getId()) {
-                showUserProjects.remove(i);
-                return;
-            }
-        }
-        showUserProjects.add(user);
+        if(showUserProjects.contains(user.getId())) showUserProjects.remove(user.getId());
+        else showUserProjects.add(user.getId());
     }
 
     public void addNewTask() {
         Task task = new Task();
         taskRepo.save(task);
-        newTasks.add(task);
+        newTasks.add(task.getId());
     }
 
     public void addTask(String taskAimTemp, String estimationTime, Map<String, String> form, Task task){
@@ -67,10 +58,6 @@ public class MainService {
         task.setEstimationTime(calendar);
         task.setTaskAim(taskAimTemp.trim());
         taskRepo.save(task);
-        newTasks.stream().forEach(task1 -> {
-            if(task.getParentTask()!=null&&task1.getId()==task.getParentTask().getId()) newTasks.set(newTasks.indexOf(task1),taskRepo.findById(task1.getId()).get());
-            if(task1.getId()==task.getId()) newTasks.set(newTasks.indexOf(task1),task);
-        });
     }
     @Transactional(rollbackFor = NullPointerException.class, propagation = Propagation.REQUIRED)
     public void addSubTask(Task parentTask){
@@ -79,45 +66,45 @@ public class MainService {
         subTask.setParentTask(parentTask);
         subTask.setUser(parentTask.getUser());
         taskRepo.save(subTask);
-        newTasks.add(subTask);
+        newTasks.add(subTask.getId());
     }
 
     public void assignUserToProject(Map<String,String> form){
-        List<String> userNames = assignedUsers.stream().map(user -> user.getUsername()).collect(Collectors.toList());
         for(String key: form.keySet()) {
-            if(!userNames.contains(key)) assignedUsers.add(userRepo.findByUsername(key));
+            if(!assignedUsers.contains(Long.parseLong(form.get(key)))) assignedUsers.add(Long.parseLong(form.get(key)));
         }
     }
 
     public void addProject(String projectAim){
-        newTasks = taskRepo.findAllByProject(null);
+        List<Task> newTasksToSave = taskRepo.findAllById(newTasks);
         if(assignedUsers.size()==0||newTasks.size()==0||projectAim.trim().isEmpty()) return;
         for(int i = 0; i < newTasks.size(); i++){
-            if(newTasks.get(i).getUser()==null||newTasks.get(i).getTaskAim()==null||newTasks.get(i).getEstimationTime()==null) return;
+            if(newTasksToSave.get(i).getUser()==null||newTasksToSave.get(i).getTaskAim()==null||newTasksToSave.get(i).getEstimationTime()==null) return;
         }
         Project project = new Project();
         project.setProjectAim(projectAim.trim());
         projectRepo.save(project);
-        assignedUsers.stream().forEach(user -> {
-            List<Project> projects = projectRepo.findByUsers_Username(user.getUsername());;
-            projects.add(project);
-            user.setProjects(projects);
-            userRepo.save(user);
-        });
-        newTasks.stream().forEach(task -> {
+        userRepo.saveAll(
+                userRepo.findAllById(assignedUsers).stream()
+                .map(user -> {
+                    user.getProjects().add(project);
+                    return user;
+                }).collect(Collectors.toList())
+        );
+        newTasksToSave.stream().forEach(task -> {
             task.setProject(project);
             task.setUser(userRepo.findById(task.getUser().getId()).get());
         });
-        taskRepo.saveAll(newTasks);
+        taskRepo.saveAll(newTasksToSave);
         assignedUsers.clear();
         newTasks.clear();
     }
 
     public void deleteUser(User user){
-        assignedUsers = assignedUsers.stream().filter(user1 -> user1.getId()!=user.getId()).collect(Collectors.toList());
-        showUserTasks = showUserTasks.stream().filter(user1 -> user1.getId()!=user.getId()).collect(Collectors.toList());
-        showUserProjects = showUserProjects.stream().filter(user1 -> user1.getId()!=user.getId()).collect(Collectors.toList());
-        newTasks = newTasks.stream().filter(task -> task.getUser().getId()!=user.getId()).collect(Collectors.toList());
+        assignedUsers.remove(user.getId());
+        showUserTasks.remove(user.getId());
+        showUserProjects.remove(user.getId());
+        newTasks.removeAll(user.getTasks().stream().map(task -> task.getId()).collect(Collectors.toList()));
         taskRepo.findAllByUser(user).stream().forEach(task -> {
             if(task.getProject()!=null){
                 task.getProject().deleteTask(task);
@@ -128,7 +115,7 @@ public class MainService {
     }
 
     public void deleteProject(Project project){
-        newTasks = newTasks.stream().filter(task -> task.getProject().getId()!=project.getId()).collect(Collectors.toList());
+        newTasks.removeAll(project.getTasks().stream().map(task -> task.getId()).collect(Collectors.toList()));
         userRepo.saveAll(
                 userRepo.findByProjects_Id(project.getId()).stream().map(user -> {
                     List<Project> projects = projectRepo.findByUsers_Username(user.getUsername());
@@ -142,33 +129,23 @@ public class MainService {
     }
 
     public void unsignUser(User user){
-        assignedUsers = assignedUsers.stream().filter(user1 -> user1.getId()!=user.getId()).collect(Collectors.toList());
-        newTasks =  newTasks.stream()
-                .filter(task -> task.getUser()==null||task.getUser().getId()!=user.getId())
-                .collect(Collectors.toList());
+        assignedUsers.remove(user.getId());
+        newTasks.removeAll(user.getTasks().stream().map(task -> task.getId()).collect(Collectors.toList()));
         user.getTasks().clear();
         userRepo.save(user);
     }
 
     public void deleteTask(Task task){
         if(task.getUser()==null) taskRepo.delete(task);
-        //User user = userRepo.findByUsername(task.getUser().getUsername());
         User user = task.getUser();
         user.deleteTask(task);
-        for(int i = 0;i < newTasks.size();i++)
-            if(newTasks.get(i).getId()==task.getId()) {
-                newTasks.remove(i);
-                i--;
-            }else if(newTasks.get(i).getParentTask()!=null&&newTasks.get(i).getId()==task.getParentTask().getId()) {
-                task.getParentTask().deleteTask(task);
-            }
+        newTasks.remove(task.getId());
         if(!task.getSubTasks().isEmpty()) deleteSubTasksFromNewTask(task.getSubTasks(),user);
         userRepo.save(user);
         for(int i = 0;i < newTasks.size();i++)
-            if(newTasks.get(i).getId()==task.getParentTask().getId()) {
+            if(newTasks.get(i)==task.getParentTask().getId()) {
                 task.getParentTask().deleteTask(task);
                 taskRepo.save(task.getParentTask());
-                newTasks.set(i, taskRepo.findById(newTasks.get(i).getId()).get());
                 break;
             }
     }
@@ -182,11 +159,7 @@ public class MainService {
     }
     public void deleteSubTasksFromNewTask(List<Task> subTasks,User user) {
         subTasks.stream().forEach(task -> {
-           for (int i = 0; i < newTasks.size(); i++)
-                if (newTasks.get(i).getId() == task.getId()) {
-                    newTasks.remove(i);
-                    break;
-                }
+             newTasks.remove(task.getId());
              user.deleteTask(task);
             if (!task.getSubTasks().isEmpty()) deleteSubTasksFromNewTask(task.getSubTasks(),user);
         });
@@ -202,19 +175,17 @@ public class MainService {
     }
 
 
-    public List<User> getShowUserTasks() {
-        return showUserTasks;
-    }
+    public List<Long> getShowUserTasks() { return showUserTasks; }
 
-    public List<User> getShowUserProjects() {
+    public List<Long> getShowUserProjects() {
         return showUserProjects;
     }
 
-    public List<Task> getNewTasks() {
+    public List<Long> getNewTasks() {
         return newTasks;
     }
 
-    public List<User> getAssignedUsers() {
+    public Set<Long> getAssignedUsers() {
         return assignedUsers;
     }
 }

@@ -33,10 +33,10 @@ public class MainController {
     public String main(Model model){
         model.addAttribute("users", userRepo.findAll());
         model.addAttribute("projects",projectRepo.findAll());
-        model.addAttribute("showUserTasks", mainService.getShowUserTasks());
-        model.addAttribute("showUserProjects", mainService.getShowUserProjects());
-        model.addAttribute("tasks", mainService.getNewTasks());
-        model.addAttribute("assignedUsers", mainService.getAssignedUsers());
+        model.addAttribute("showUserTasks", userRepo.findAllById(mainService.getShowUserTasks()));
+        model.addAttribute("showUserProjects", userRepo.findAllById(mainService.getShowUserProjects()));
+        model.addAttribute("tasks", taskRepo.findAllById(mainService.getNewTasks()));
+        model.addAttribute("assignedUsers", userRepo.findAllById(mainService.getAssignedUsers()));
         model.addAttribute("showUsers", showUsers);
         model.addAttribute("showProjects", showProjects);
         model.addAttribute("currentTime",Calendar.getInstance());
